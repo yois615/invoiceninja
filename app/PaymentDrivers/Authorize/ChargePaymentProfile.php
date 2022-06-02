@@ -74,14 +74,18 @@ class ChargePaymentProfile
         $order->setInvoiceNumber(substr($invoice_numbers,0,19));
         $order->setDescription(substr($description,0,255));
         
-        $tax = new ExtendedAmountType();
-        $tax->setName('tax');
-        $tax->setAmount($taxAmount);
+        if (!empty($taxAmount)) {
+            $tax = new ExtendedAmountType();
+            $tax->setName('tax');
+            $tax->setAmount($taxAmount);
+        }
 
         $transactionRequestType = new TransactionRequestType();
         $transactionRequestType->setTransactionType('authCaptureTransaction');
         $transactionRequestType->setAmount($amount);
-        $transactionRequestType->setTax($tax);
+        if (!empty($taxAmount)) {
+            $transactionRequestType->setTax($tax);
+        }
         $transactionRequestType->setTaxExempt(empty($taxAmount));
         $transactionRequestType->setOrder($order);
         $transactionRequestType->setProfile($profileToCharge);
