@@ -66,8 +66,23 @@ class ChargePaymentProfile
             } else {
                 $taxAmount = $invoiceTaxes;
             }
-        }
-        
+			
+			//Level 3 data
+			$invLineItems = $invObj->pluck('line_items')->toArray();
+			foreach ($invLineItems as $k => $jsonLine) {
+				$decoded = json_decode($jsonLine);
+				foreach ($decoded as $key => $line) {
+					$lineItem = new LineItemType();
+					$lineItem->setItemId($line['product_key']);
+					$lineItem->setDescription($line['notes']);
+					$lineItem->setQuantity($line['quantity']);
+					$lineItem->setUnitPrice($line['cost']);
+					$lineItems[] = $lineItem;
+					unset($lineItem);
+				}
+			}
+		}
+
         $description = "Invoices: {$invoice_numbers} for {$amount} for client {$this->authorize->client->present()->name()}";
 
         $order = new OrderType();
