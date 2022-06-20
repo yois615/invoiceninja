@@ -138,6 +138,7 @@ class HtmlEngine
         $data['$credit.datetime'] = &$data['$entity.datetime'];
         $data['$payment_button'] = ['value' => '<a class="button" href="'.$this->invitation->getPaymentLink().'">'.ctrans('texts.pay_now').'</a>', 'label' => ctrans('texts.pay_now')];
         $data['$payment_link'] = ['value' => $this->invitation->getPaymentLink(), 'label' => ctrans('texts.pay_now')];
+        $data['$portal_button'] = ['value' => '<a class="button" href="'.\App\Models\ClientContact::where('id', $this->invitation->client_contact_id)->first()->getLoginLink().'">'.ctrans('texts.view_client_portal').'</a>', 'label' => ctrans('view_client_portal')];
 
 
         if ($this->entity_string == 'invoice' || $this->entity_string == 'recurring_invoice') {
