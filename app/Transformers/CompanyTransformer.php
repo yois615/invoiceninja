@@ -29,6 +29,7 @@ use App\Models\Payment;
 use App\Models\PaymentTerm;
 use App\Models\Product;
 use App\Models\Project;
+use App\Models\PurchaseOrder;
 use App\Models\Quote;
 use App\Models\RecurringExpense;
 use App\Models\RecurringInvoice;
@@ -39,6 +40,7 @@ use App\Models\TaskStatus;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Models\Webhook;
+use App\Transformers\PurchaseOrderTransformer;
 use App\Transformers\RecurringExpenseTransformer;
 use App\Utils\Traits\MakesHash;
 use stdClass;
@@ -95,6 +97,7 @@ class CompanyTransformer extends EntityTransformer
         'task_statuses',
         'subscriptions',
         'recurring_expenses',
+        'purchase_orders',
     ];
 
     /**
@@ -170,6 +173,10 @@ class CompanyTransformer extends EntityTransformer
             'markdown_email_enabled' => (bool) $company->markdown_email_enabled,
             'stop_on_unpaid_recurring' => (bool) $company->stop_on_unpaid_recurring,
             'use_quote_terms_on_conversion' => (bool) $company->use_quote_terms_on_conversion,
+            'stock_notification' => (bool) $company->stock_notification,
+            'inventory_notification_threshold' => (int) $company->inventory_notification_threshold,
+            'track_inventory' => (bool) $company->track_inventory,
+            'enable_applying_payments' => (bool) $company->enable_applying_payments,
         ];
     }
 
@@ -386,5 +393,12 @@ class CompanyTransformer extends EntityTransformer
         $transformer = new SubscriptionTransformer($this->serializer);
 
         return $this->includeCollection($company->subscriptions, $transformer, Subscription::class);
+    }
+
+    public function includePurchaseOrders(Company $company)
+    {
+        $transformer = new PurchaseOrderTransformer($this->serializer);
+
+        return $this->includeCollection($company->purchase_orders, $transformer, PurchaseOrder::class);
     }
 }

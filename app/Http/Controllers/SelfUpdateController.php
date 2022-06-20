@@ -135,30 +135,33 @@ class SelfUpdateController extends BaseController
 
         nlog("Extracting zip");
 
-        try{
-            $s = new Snappdf;
-            $s->getChromiumPath();
-            chmod($this->generatePlatformExecutable($s->getChromiumPath()), 0755);
-        }
-        catch(\Exception $e){
-            nlog("I could not set the file permissions for chrome");
-        }
-
-        // $zipFile = new \PhpZip\ZipFile();
-
-        // $zipFile->openFile($file);
-
-        // $zipFile->extractTo(base_path());
-
-        // $zipFile->close();
-
-        $zip = new \ZipArchive;
+        //clean up old snappdf installations
+        $this->cleanOldSnapChromeBinaries();
         
-        $res = $zip->open($file);
-        if ($res === TRUE) {
-            $zip->extractTo(base_path());
-            $zip->close();
-        } 
+        // try{
+        //     $s = new Snappdf;
+        //     $s->getChromiumPath();
+        //     chmod($this->generatePlatformExecutable($s->getChromiumPath()), 0755);
+        // }
+        // catch(\Exception $e){
+        //     nlog("I could not set the file permissions for chrome");
+        // }
+
+        $zipFile = new \PhpZip\ZipFile();
+
+        $zipFile->openFile($file);
+
+        $zipFile->extractTo(base_path());
+
+        $zipFile->close();
+
+        // $zip = new \ZipArchive;
+        
+        // $res = $zip->open($file);
+        // if ($res === TRUE) {
+        //     $zip->extractTo(base_path());
+        //     $zip->close();
+        // } 
 
         nlog("Finished extracting files");
 
@@ -188,6 +191,46 @@ class SelfUpdateController extends BaseController
         return response()->json(['message' => 'Update completed'], 200);
 
 
+    }
+
+    private function cleanOldSnapChromeBinaries()
+    {
+        $current_revision =  base_path('vendor/beganovich/snappdf/versions/revision.txt');
+        $current_revision_text = file_get_contents($current_revision);
+
+        $iterator = new \DirectoryIterator(base_path('vendor/beganovich/snappdf/versions'));
+
+        foreach ($iterator as $file) 
+        {
+
+            if($file->isDir() && !$file->isDot() && ($current_revision_text != $file->getFileName()))
+            {
+
+                $directoryIterator = new \RecursiveDirectoryIterator(base_path('vendor/beganovich/snappdf/versions/'.$file->getFileName()), \RecursiveDirectoryIterator::SKIP_DOTS);
+
+                foreach (new \RecursiveIteratorIterator($directoryIterator) as $filex) 
+                {
+                  unlink($filex->getPathName());
+                }
+
+                $this->deleteDirectory(base_path('vendor/beganovich/snappdf/versions/'.$file->getFileName()));
+            }
+
+        }
+
+    }
+
+    private function deleteDirectory($dir) {
+        if (!file_exists($dir)) return true;
+    
+        if (!is_dir($dir) || is_link($dir)) return unlink($dir);
+            foreach (scandir($dir) as $item) {
+                if ($item == '.' || $item == '..') continue;
+                if (!$this->deleteDirectory($dir . "/" . $item)) {
+                    if (!$this->deleteDirectory($dir . "/" . $item)) return false;
+                };
+            }
+            return rmdir($dir);
     }
 
     private function postHookUpdate()

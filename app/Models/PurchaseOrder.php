@@ -12,13 +12,22 @@
 namespace App\Models;
 
 
+use App\Helpers\Invoice\InvoiceSum;
+use App\Helpers\Invoice\InvoiceSumInclusive;
+use App\Jobs\Entity\CreateEntityPdf;
+use App\Jobs\Vendor\CreatePurchaseOrderPdf;
 use App\Services\PurchaseOrder\PurchaseOrderService;
+use App\Utils\Ninja;
+use App\Utils\Traits\MakesDates;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class PurchaseOrder extends BaseModel
 {
     use Filterable;
     use SoftDeletes;
+    use MakesDates;
 
     protected $fillable = [
         'number',
@@ -92,8 +101,51 @@ class PurchaseOrder extends BaseModel
 
     const STATUS_DRAFT = 1;
     const STATUS_SENT = 2;
-    const STATUS_PARTIAL = 3;
-    const STATUS_APPLIED = 4;
+    const STATUS_ACCEPTED = 3;
+    const STATUS_CANCELLED = 4;
+
+    public static function stringStatus(int $status)
+    {
+        switch ($status) {
+            case self::STATUS_DRAFT:
+                return ctrans('texts.draft');
+                break;
+            case self::STATUS_SENT:
+                return ctrans('texts.sent');
+                break;
+            case self::STATUS_ACCEPTED:
+                return ctrans('texts.accepted');
+                break;
+            case self::STATUS_CANCELLED:
+                return ctrans('texts.cancelled');
+                break;
+                // code...
+                break;
+        }
+    }
+
+
+    public static function badgeForStatus(int $status)
+    {
+        switch ($status) {
+            case self::STATUS_DRAFT:
+                return '<h5><span class="badge badge-light">'.ctrans('texts.draft').'</span></h5>';
+                break;
+            case self::STATUS_SENT:
+                return '<h5><span class="badge badge-primary">'.ctrans('texts.sent').'</span></h5>';
+                break;
+            case self::STATUS_ACCEPTED:
+                return '<h5><span class="badge badge-primary">'.ctrans('texts.accepted').'</span></h5>';
+                break;
+            case self::STATUS_CANCELLED:
+                return '<h5><span class="badge badge-secondary">'.ctrans('texts.cancelled').'</span></h5>';
+                break;
+            default:
+                // code...
+                break;
+        }
+    }
+
 
     public function assigned_user()
     {
@@ -129,11 +181,52 @@ class PurchaseOrder extends BaseModel
     {
         return $this->belongsTo(Client::class)->withTrashed();
     }
+    public function markInvitationsSent()
+    {
+        $this->invitations->each(function ($invitation) {
+            if (! isset($invitation->sent_date)) {
+                $invitation->sent_date = Carbon::now();
+                $invitation->save();
+            }
+        });
+    }
 
+    public function pdf_file_path($invitation = null, string $type = 'path', bool $portal = false)
+    {
+        if (! $invitation) {
+
+            if($this->invitations()->exists())
+                $invitation = $this->invitations()->first();
+            else{
+                $this->service()->createInvitations();
+                $invitation = $this->invitations()->first();
+            }
+
+        }
+
+        if(!$invitation)
+            throw new \Exception('Hard fail, could not create an invitation - is there a valid contact?');
+
+        $file_path = $this->vendor->purchase_order_filepath($invitation).$this->numberFormatter().'.pdf';
+
+        if(Ninja::isHosted() && $portal && Storage::disk(config('filesystems.default'))->exists($file_path)){
+            return Storage::disk(config('filesystems.default'))->{$type}($file_path);
+        }
+        elseif(Ninja::isHosted() && $portal){
+            $file_path = CreatePurchaseOrderPdf::dispatchNow($invitation,config('filesystems.default'));
+            return Storage::disk(config('filesystems.default'))->{$type}($file_path);
+        }
+
+        if(Storage::disk('public')->exists($file_path))
+            return Storage::disk('public')->{$type}($file_path);
+
+        $file_path = CreatePurchaseOrderPdf::dispatchNow($invitation);
+        return Storage::disk('public')->{$type}($file_path);
+    }
 
     public function invitations()
     {
-        return $this->hasMany(CreditInvitation::class);
+        return $this->hasMany(PurchaseOrderInvitation::class);
     }
 
     public function project()
@@ -148,7 +241,7 @@ class PurchaseOrder extends BaseModel
 
     public function service()
     {
-        return new  PurchaseOrderService($this);
+        return new PurchaseOrderService($this);
     }
 
     public function invoices()
@@ -164,6 +257,19 @@ class PurchaseOrder extends BaseModel
     public function documents()
     {
         return $this->morphMany(Document::class, 'documentable');
+    }
+
+    public function calc()
+    {
+        $purchase_order_calc = null;
+
+        if ($this->uses_inclusive_taxes) {
+            $purchase_order_calc = new InvoiceSumInclusive($this);
+        } else {
+            $purchase_order_calc = new InvoiceSum($this);
+        }
+
+        return $purchase_order_calc->build();
     }
 
 }

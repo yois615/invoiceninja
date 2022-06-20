@@ -13,6 +13,7 @@ namespace App\Services\Invoice;
 
 use App\Events\Invoice\InvoiceWasArchived;
 use App\Jobs\Entity\CreateEntityPdf;
+use App\Jobs\Inventory\AdjustProductInventory;
 use App\Jobs\Invoice\InvoiceWorkflowSettings;
 use App\Jobs\Util\UnlinkFile;
 use App\Libraries\Currency\Conversion\CurrencyApi;
@@ -178,7 +179,7 @@ class InvoiceService
         $this->invoice = (new MarkSent($this->invoice->client, $this->invoice))->run();
 
         $this->setExchangeRate();
-
+        
         return $this;
     }
 
@@ -340,7 +341,7 @@ class InvoiceService
             if(Storage::disk(config('filesystems.default'))->exists($this->invoice->client->invoice_filepath($invitation) . $this->invoice->numberFormatter().'.pdf'))
                 Storage::disk(config('filesystems.default'))->delete($this->invoice->client->invoice_filepath($invitation) . $this->invoice->numberFormatter().'.pdf');
             
-            if(Ninja::isHosted() && Storage::disk(config('filesystems.default'))->exists($this->invoice->client->invoice_filepath($invitation) . $this->invoice->numberFormatter().'.pdf')) {
+            if(Ninja::isHosted() && Storage::disk('public')->exists($this->invoice->client->invoice_filepath($invitation) . $this->invoice->numberFormatter().'.pdf')) {
                 Storage::disk('public')->delete($this->invoice->client->invoice_filepath($invitation) . $this->invoice->numberFormatter().'.pdf');
             }
 
@@ -560,6 +561,15 @@ class InvoiceService
         
 
         }
+
+        return $this;
+    }
+
+    public function adjustInventory($old_invoice = [])
+    {
+
+        if($this->invoice->company->track_inventory)
+            AdjustProductInventory::dispatchNow($this->invoice->company, $this->invoice, $old_invoice);
 
         return $this;
     }
