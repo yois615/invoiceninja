@@ -119,7 +119,23 @@ class SendRecurring implements ShouldQueue
 
         event('eloquent.created: App\Models\Invoice', $invoice);
 
-        if ($invoice->client->getSetting('auto_email_invoice')) {
+        //Attempt to Autobill before sending invoice
+        if ($invoice->client->getSetting('auto_bill_date') == 'on_send_date' && $invoice->auto_bill_enabled) {
+            nlog("attempting to autobill {$invoice->number}");
+                // $invoice->service()->autoBill();
+                AutoBill::dispatch($invoice->id, $this->db)->delay(rand(1,2));
+
+        } elseif ($invoice->client->getSetting('auto_bill_date') == 'on_due_date' && $invoice->auto_bill_enabled) {
+            if ($invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->lte(now()->startOfDay())) {
+                nlog("attempting to autobill {$invoice->number}");
+                // $invoice->service()->autoBill();
+                AutoBill::dispatch($invoice->id, $this->db)->delay(rand(1,2));
+            }
+        }
+
+        $invoice = $invoice->fresh();
+        //Only send invoice if auto_email_invoice, and invoice is still payable after AutoBill
+        if ($invoice->client->getSetting('auto_email_invoice') && ((float)$invoice->balance != 0)) {
             //Admin notification for recurring invoice sent.
             if ($invoice->invitations->count() >= 1) {
                 $invoice->entityEmailEvent($invoice->invitations->first(), 'invoice', 'email_template_invoice');
@@ -140,18 +156,7 @@ class SendRecurring implements ShouldQueue
             });
         }
 
-        if ($invoice->client->getSetting('auto_bill_date') == 'on_send_date' && $invoice->auto_bill_enabled) {
-            nlog("attempting to autobill {$invoice->number}");
-                // $invoice->service()->autoBill();
-                AutoBill::dispatch($invoice->id, $this->db)->delay(rand(1,2));
-
-        } elseif ($invoice->client->getSetting('auto_bill_date') == 'on_due_date' && $invoice->auto_bill_enabled) {
-            if ($invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->lte(now()->startOfDay())) {
-                nlog("attempting to autobill {$invoice->number}");
-                // $invoice->service()->autoBill();
-                AutoBill::dispatch($invoice->id, $this->db)->delay(rand(1,2));
-            }
-        }
+        
     }
 
     /**
